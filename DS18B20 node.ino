@@ -3,35 +3,36 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
-#define ONE_WIRE_BUS 4 // Chân kết nối với DS18B20
+#define ONE_WIRE_BUS 4 // Pin connected to DS18B20
 #define LORA_SS 18 // Define the chip select pin for the LoRa module.
 #define LORA_RST 14 // Define the reset pin for the LoRa module.
 #define LORA_DI0 26 // Define the DIO0 pin for interrupt handling.
-OneWire oneWire(ONE_WIRE_BUS);
 
-DallasTemperature sensors(&oneWire);
+OneWire oneWire(ONE_WIRE_BUS); // Initialize OneWire bus with the defined pin.
+
+DallasTemperature sensors(&oneWire); // Pass the oneWire reference to DallasTemperature library.
 
 void setup() {
-  Serial.begin(9600); // Khởi tạo giao tiếp serial baudrate 9600 
-  while (!Serial); // Đợi cho đến khi serial đã sẵn sàng
+  Serial.begin(9600); // Initialize serial communication with baudrate 9600
+  while (!Serial); // Wait until serial is ready
 
-  if (!LoRa.begin(433E6)) { // Khởi tạo module LoRa ở tần số 433MHz
-    Serial.println("Starting LoRa failed!"); // In ra serial thông báo lỗi nếu khởi tạo LoRa thất bại
-    while (1); // Dừng chương trình
+  if (!LoRa.begin(433E6)) { // Initialize LoRa module at 433MHz frequency
+    Serial.println("Starting LoRa failed!"); // Print error message to serial if LoRa initialization fails
+    while (1); // Halt the program
   }
 
-  sensors.begin(); // Khởi tạo cảm biến DS18B20
+  sensors.begin(); // Initialize DS18B20 sensor
 }
 
 void loop() {
-  sensors.requestTemperatures(); // Gửi yêu cầu để cảm biến nhiệt độ đo nhiệt độ
-  float temperature = sensors.getTempCByIndex(0); // Lấy giá trị nhiệt độ từ cảm biến và lưu vào biến temperature
+  sensors.requestTemperatures(); // Send a request to the temperature sensor to measure temperature
+  float temperature = sensors.getTempCByIndex(0); // Get temperature value from the sensor and store it in 'temperature' variable
 
-  String data = "Temperature: " + String(temperature) + " C"; // Tạo một chuỗi dữ liệu chứa thông tin về nhiệt độ
-  LoRa.beginPacket(); // Bắt đầu gửi gói tin LoRa
-  LoRa.print(data); // Gửi dữ liệu thông qua LoRa
-  LoRa.endPacket(); // Kết thúc gửi gói tin LoRa
+  String data = "Temperature: " + String(temperature) + " C"; // Create a data string containing temperature information
+  LoRa.beginPacket(); // Start sending LoRa packet
+  LoRa.print(data); // Send data via LoRa
+  LoRa.endPacket(); // End LoRa packet transmission
 
-  Serial.println("Sent: " + data); // In ra serial thông tin về dữ liệu đã gửi
-  delay(5000); // Dừng chương trình trong 5 giây trước khi lặp lại quá trình gửi dữ liệu
+  Serial.println("Sent: " + data); // Print information about the sent data to serial
+  delay(5000); // Delay program for 5 seconds before repeating the data transmission process
 }

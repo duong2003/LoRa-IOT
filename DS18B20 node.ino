@@ -4,8 +4,11 @@
 #include <DallasTemperature.h>
 
 #define ONE_WIRE_BUS 4 // Chân kết nối với DS18B20
-
+#define LORA_SS 18 // Define the chip select pin for the LoRa module.
+#define LORA_RST 14 // Define the reset pin for the LoRa module.
+#define LORA_DI0 26 // Define the DIO0 pin for interrupt handling.
 OneWire oneWire(ONE_WIRE_BUS);
+
 DallasTemperature sensors(&oneWire);
 
 void setup() {

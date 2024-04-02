@@ -2,78 +2,104 @@
 #include <LoRa.h>
 #include <LiquidCrystal_I2C.h>
 #include <FirebaseESP32.h>
-#include "firebaseConnectionInfo.h" // File chứa thông tin kết nối Firebase
+#include "firebaseConnectionInfo.h" // File containing Firebase connection information
 #include <BluetoothSerial.h>
 
 #define FIREBASE_PROJECT_ID ""
 #define FIREBASE_DATABASE_URL "https://" FIREBASE_PROJECT_ID ".firebaseio.com"
-#define FIREBASE_SECRET "" // Secret key để truy cập dữ liệu Firebase
+#define FIREBASE_SECRET "" // Secret key to access Firebase data
 
-LiquidCrystal_I2C lcd(0x27, 16, 2); // Khởi tạo màn hình LCD I2C
-FirebaseData firebaseData; // Khởi tạo FirebaseData
-BluetoothSerial SerialBT; // Khởi tạo BluetoothSerial
+#define LORA_SS 18 // Define the chip select pin for the LoRa module.
+#define LORA_RST 14 // Define the reset pin for the LoRa module.
+#define LORA_DI0 26 // Define the DIO0 pin for interrupt handling.
+
+LiquidCrystal_I2C lcd(0x27, 16, 2); // Initialize I2C LCD
+FirebaseData firebaseData; // Initialize FirebaseData
+BluetoothSerial SerialBT; // Initialize BluetoothSerial
+
+#define RSSI_FILTER_WINDOW_SIZE 10 // Define the size of the moving average filter window for RSSI
+int rssiBuffer[RSSI_FILTER_WINDOW_SIZE]; // Buffer to store RSSI values
+int bufferIndex = 0; // Index for circular buffer
+float filteredRSSI = 0; // Variable to store filtered RSSI value
 
 void setup() {
-  Serial.begin(9600); // Khởi tạo serial baudrate 9600
-  while (!Serial); // Đợi đã sẵn sàng
+  Serial.begin(9600); // Initialize serial with baudrate 9600
+  while (!Serial); // Wait for serial connection to be established
 
-  lcd.begin(); // Khởi tạo LCD
-  lcd.backlight(); // Bật đèn nền LCD
-  lcd.clear(); // Xóa LCD
+  lcd.begin(); // Initialize LCD
+  lcd.backlight(); // Turn on LCD backlight
+  lcd.clear(); // Clear LCD screen
 
-  if (!LoRa.begin(433E6)) { // Khởi tạo module LoRa ở tần số 433MHz
-    Serial.println("Starting LoRa failed!"); // In ra serial thông báo lỗi nếu khởi tạo LoRa thất bại
-    while (1); // Dừng chương trình
+  if (!LoRa.begin(433E6)) { // Initialize LoRa module at 433MHz frequency
+    Serial.println("Starting LoRa failed!"); // Print error message if initialization fails
+    while (1); // Halt the program
   }
 
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD); // Kết nối WiFi
-  while (WiFi.status() != WL_CONNECTED) { // Đợi khi kết nối WiFi thành công
+  // Configure LoRa module pins
+  LoRa.setPins(LORA_SS, LORA_RST, LORA_DI0);
+
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD); // Connect to WiFi
+  while (WiFi.status() != WL_CONNECTED) { // Wait for WiFi connection
     delay(1000);
     Serial.println("Connecting to WiFi...");
   }
 
-  Firebase.begin(FIREBASE_DATABASE_URL, FIREBASE_SECRET); // Kết nối đến Firebase
+  Firebase.begin(FIREBASE_DATABASE_URL, FIREBASE_SECRET); // Connect to Firebase
 
-  SerialBT.begin("ESP32_BT"); // Khởi động Bluetooth với tên thiết bị là "ESP32_BT"
+  SerialBT.begin("ESP32_BT"); // Start Bluetooth with device name "ESP32_BT"
 }
 
 void loop() {
-  // Xử lý dữ liệu từ LoRa
-  int packetSize = LoRa.parsePacket(); // Kiểm tra xem có gói tin nào từ LoRa không
-  if (packetSize) { // Nếu có gói tin
-    while (LoRa.available()) { // Vòng lặp để đọc toàn bộ dữ liệu từ LoRa
-      String sensorData = LoRa.readString(); // Đọc dữ liệu từ LoRa
-      handleData(sensorData); // Xử lý dữ liệu
-      delay(3000); // Đợi 3 giây trước khi xử lý dữ liệu tiếp theo
+  // Receive LoRa packets
+  int packetSize = LoRa.parsePacket(); // Check if there's a LoRa packet available
+  if (packetSize) { // If a packet is available
+    while (LoRa.available()) { // Loop through all available bytes
+      String sensorData = LoRa.readString(); // Read the data from LoRa
+      handleData(sensorData); // Handle the received data
+      delay(3000); // Wait for 3 seconds before processing the next packet
     }
   }
 
-  // Xử lý dữ liệu từ Bluetooth
-  if (SerialBT.available()) { // Kiểm tra xem có dữ liệu từ Bluetooth không
-    String sensorData = SerialBT.readString(); // Đọc dữ liệu từ Bluetooth
-    handleData(sensorData); // Xử lý dữ liệu
-    delay(3000); // Đợi 3 giây trước khi xử lý dữ liệu tiếp theo
+  // Process Bluetooth data
+  if (SerialBT.available()) { // Check if there's data available on Bluetooth
+    String sensorData = SerialBT.readString(); // Read data from Bluetooth
+    handleData(sensorData); // Handle the received data
+    delay(3000); // Wait for 3 seconds before processing the next data
   }
 }
 
 void handleData(String data) {
-  // Hiển thị dữ liệu trên LCD
-  lcd.clear(); // Xóa màn hình LCD
-  lcd.setCursor(0, 0); // Đặt con trỏ ở vị trí (0, 0)
-  lcd.print("Received: "); // In chuỗi "Received: "
-  lcd.setCursor(0, 1); // Đặt con trỏ ở vị trí (0, 1)
-  lcd.print(data); // In dữ liệu nhận được lên màn hình LCD
+  // Display data on LCD
+  lcd.clear(); // Clear LCD screen
+  lcd.setCursor(0, 0); // Set cursor to the beginning of the first line
+  lcd.print("Received: "); // Print label
+  lcd.setCursor(0, 1); // Set cursor to the beginning of the second line
+  lcd.print(data); // Print received data
 
-  // Gửi dữ liệu lên Firebase
-  if (Firebase.pushString(firebaseData, "/sensorData", data)) { // Gửi dữ liệu lên Firebase
-    Serial.println("Data pushed to Firebase!"); // In ra serial thông báo gửi dữ liệu thành công
+  // Push data to Firebase
+  if (Firebase.pushString(firebaseData, "/sensorData", data)) { // Push data to Firebase
+    Serial.println("Data pushed to Firebase!"); // Print success message
   } else {
-    Serial.println("Pushing data to Firebase failed!"); // In ra serial thông báo gửi dữ liệu thất bại
-    Serial.println("Reason: " + firebaseData.errorReason()); // In ra serial lý do thất bại (nếu có)
+    Serial.println("Pushing data to Firebase failed!"); // Print failure message
+    Serial.println("Reason: " + firebaseData.errorReason()); // Print error reason
   }
 
-  // Gửi dữ liệu qua LoRa (nếu cần)
-  LoRa.beginPacket(); // Bắt đầu gửi gói tin LoRa
-  LoRa.print(data); // Gửi dữ liệu qua LoRa
-  LoRa.endPacket(); // Kết thúc gửi gói tin LoRa
+  // Send data via LoRa
+  LoRa.beginPacket(); // Start a LoRa packet
+  LoRa.print(data); // Print the data
+  LoRa.endPacket(); // Finish the LoRa packet
+
+  // Calculate moving average RSSI
+  int packetRSSI = LoRa.packetRssi(); // Get the RSSI of the received packet
+  rssiBuffer[bufferIndex] = packetRSSI; // Store RSSI value in buffer
+  bufferIndex = (bufferIndex + 1) % RSSI_FILTER_WINDOW_SIZE; // Update buffer index for circular behavior
+
+  // Compute moving average
+  float sum = 0;
+  for (int i = 0; i < RSSI_FILTER_WINDOW_SIZE; i++) {
+    sum += rssiBuffer[i];
+  }
+  filteredRSSI = sum / RSSI_FILTER_WINDOW_SIZE;
+  Serial.print("Filtered RSSI: ");
+  Serial.println(filteredRSSI);
 }

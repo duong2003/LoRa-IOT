@@ -1,7 +1,10 @@
 #include <Wire.h>
 #include <LoRa.h>
 
-#define SOIL_MOISTURE_PIN 5 // Chân kết nối với Soil Moisture Sensor
+#define SOIL_MOISTURE_PIN 5 // Pin connected to Soil Moisture Sensor
+#define LORA_CS_PIN      18
+#define LORA_RST_PIN     14
+#define LORA_IRQ_PIN     26
 
 void setup() {
   Serial.begin(9600);
@@ -13,6 +16,8 @@ void setup() {
     Serial.println("Starting LoRa failed!");
     while (1);
   }
+
+  LoRa.setPins(LORA_CS_PIN, LORA_RST_PIN, LORA_IRQ_PIN);
 }
 
 void loop() {
@@ -24,5 +29,5 @@ void loop() {
   LoRa.endPacket();
 
   Serial.println("Sent: " + data);
-  delay(5000); // Gửi dữ liệu mỗi 5 giây
+  delay(5000); // Send data every 5 seconds
 }
